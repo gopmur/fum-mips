@@ -349,10 +349,12 @@ public:
 	void next_clock() {
 		OpCode opcode = (OpCode) (virtualIstructionMemory[pc] >> 26);
 		Instruction instruction;
+		Op op;
 		// j type
 		if (opcode == OpCode::J) {
 			instruction.j.opcode = opcode;
 			instruction.j.immediate = virtualIstructionMemory[pc] & ((1 << 26) - 1);
+			op = Op::J;
 		}
 		// r type
 		else if (opcode == OpCode::RTYPE) {
@@ -362,6 +364,29 @@ public:
 			instruction.r.rd = (virtualIstructionMemory[pc] >> 11) & ((1 << 5) - 1);
 			instruction.r.shamt = (virtualIstructionMemory[pc] >> 6) & ((1 << 5) - 1);
 			instruction.r.funct = (Funct) (virtualIstructionMemory[pc] & ((1 << 6) - 1));
+			switch (instruction.r.funct) {
+
+			case Funct::ADD:
+				op = Op::ADD;
+				break;
+
+			case Funct::SUB:
+				op = Op::SUB;
+				break;
+
+			case Funct::AND:
+				op = Op::AND;
+				break;
+
+			case Funct::OR:
+				op = Op::OR;
+				break;
+
+			case Funct::SLT:
+				op = Op::SLT;
+				break;
+
+			}
 		}
 		// i type
 		else {
@@ -369,18 +394,104 @@ public:
 			instruction.i.rs = (virtualIstructionMemory[pc] >> 21) & ((1 << 5) - 1);
 			instruction.i.rt = (virtualIstructionMemory[pc] >> 16) & ((1 << 5) - 1);
 			instruction.i.immediate = virtualIstructionMemory[pc] & ((1 << 16) - 1);
+	
+			switch (instruction.i.opcode) {
+
+			case OpCode::SW:
+				op = Op::SW;
+				break;
+
+			case OpCode::LW:
+				op = Op::LW;
+				break;
+
+			case OpCode::ADDI:
+				op = Op::ADDI;
+				break;
+
+			case OpCode::SLTI:
+				op = Op::SLTI;
+				break;
+
+			case OpCode::ANDI:
+				op = Op::ANDI;
+				break;
+
+			case OpCode::ORI:
+				op = Op::ORI;
+				break;
+
+			case OpCode::BEQ:
+				op = Op::BEQ;
+				break;
+
+			case OpCode::BNE:
+				op = Op::BNE;
+				break;
+
+			}
 		}
-		int regDst = 0;
-		int jump = 0;
-		int branch = 1;
-		int memRead = 0;
-		int memToReg = 0;
-		int aluOp = AluOp::SUB;
-		int memWrite = 0;
-		int aluSrc = 0;
-		int regWrite = 0;
-		int slt = 0;
+
+		int regDst;
+		int jump;
+		int branch;
+		int memRead;
+		int memToReg;
+		AluOp aluOp;
+		int memWrite;
+		int aluSrc;
+		int regWrite;
+		int slt;
+
+		int writeRegister;
+		int writeRegisterData;
+
+		int readData1;
+		int readData2;
+
+		int aluIn2;
+		int aluOut;
+		int aluZero;
+		int aluNegative;
+
+		int memoryReadData;
+
+		int pc4;
+
+		int jumpAddress;
+		int branchAddress;
+
+		int pcAddr1;
+		int pcAddr2;
+
+		control(op, &regDst, &jump, &branch, &memRead, &memToReg, &aluOp, &memWrite, &aluSrc, &regWrite, &slt);
 		
+		mux(instruction.r.rt, instruction.r.rd, regDst, &writeRegister);
+
+		register_file(instruction.r.rs, instruction.r.rt, writeRegister, writeRegisterData, regWrite, &readData1, &readData2);
+
+		mux(readData2, instruction.i.immediate, aluSrc, &aluIn2);
+
+		alu(readData1, aluIn2, aluOp, &aluOut, &aluZero, &aluNegative);
+
+		memory(aluOut, readData2, memRead, memWrite, &memoryReadData);
+
+		mux(aluOut, memoryReadData, memToReg, &writeRegisterData);
+
+		register_file(instruction.r.rs, instruction.r.rt, writeRegister, writeRegisterData, regWrite, &readData1, &readData2);
+
+		alu(pc, 4, AluOp::ADD, &pc4, NULL, NULL);
+
+		jumpAddress = (instruction.j.immediate << 2) | ((((1 << 4) - 1) << 28) & pc);
+
+		alu(pc4, instruction.i.immediate << 2, AluOp::ADD, &branchAddress, NULL, NULL);
+
+		mux(pc4, branchAddress, (int) (branch &&aluZero), &pcAddr1);
+
+		mux(pcAddr1, jumpAddress, jump, &pcAddr2);
+
+		pc = pcAddr2;
+
 	}
 
 };
