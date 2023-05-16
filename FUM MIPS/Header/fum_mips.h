@@ -48,7 +48,7 @@ public:
 		int immediate;
 	};
 
-	union Instruction {
+	struct Instruction {
 		RType r;
 		IType i;
 		JType j;
